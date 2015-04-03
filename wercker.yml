@@ -17,7 +17,7 @@ build:
           curl -SLO "https://iojs.org/dist/v$IOJS_VERSION/SHASUMS256.txt.asc"
           gpg --verify SHASUMS256.txt.asc
           grep " iojs-v$IOJS_VERSION-linux-x64.tar.gz\$" SHASUMS256.txt.asc | sha256sum -c -
-          # NOTE(termie): if all the tests pass this makes sure we use the same
+          # NOTE(termie): if all the tests pass this cp makes sure we use the same
           #               artifact for the deploy
           cp "iojs-v$IOJS_VERSION-linux-x64.tar.gz" $WERCKER_OUTPUT_DIR/
           tar -xzf "iojs-v$IOJS_VERSION-linux-x64.tar.gz" -C /usr/local --strip-components=1

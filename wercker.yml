@@ -1,0 +1,66 @@
+box: buildpack-deps:jessie
+build:
+  steps:
+    - script:
+        # gpg keys listed at https://github.com/iojs/io.js
+        name: gpg
+        code: gpg --keyserver pool.sks-keyservers.net --recv-keys 9554F04D7259F04124DE6B476D5A82AC7E37093B DD8F2338BAE7501E3DD5AC78C273792F7D83545D
+    - script:
+        name: grab dist to test
+        code: |
+          # NOTE(termie): you should set these in the pipeline environment
+          #               in the wercker interface to target different versions
+          export NPM_CONFIG_LOGLEVEL=info
+          export IOJS_VERSION=1.6.3
+
+          curl -SLO "https://iojs.org/dist/v$IOJS_VERSION/iojs-v$IOJS_VERSION-linux-x64.tar.gz"
+          curl -SLO "https://iojs.org/dist/v$IOJS_VERSION/SHASUMS256.txt.asc"
+          gpg --verify SHASUMS256.txt.asc
+          grep " iojs-v$IOJS_VERSION-linux-x64.tar.gz\$" SHASUMS256.txt.asc | sha256sum -c -
+          # NOTE(termie): if all the tests pass this makes sure we use the same
+          #               artifact for the deploy
+          cp "iojs-v$IOJS_VERSION-linux-x64.tar.gz" $WERCKER_OUTPUT_DIR/
+          tar -xzf "iojs-v$IOJS_VERSION-linux-x64.tar.gz" -C /usr/local --strip-components=1
+          rm "iojs-v$IOJS_VERSION-linux-x64.tar.gz" SHASUMS256.txt.asc
+    - script:
+        name: grab tests
+        code: |
+          curl -L https://github.com/iojs/io.js/tarball/v$IOJS_VERSION -o iojs.tgz
+          tar --absolute-names -xzf iojs.tgz
+          mv iojs-io.js* /usr/src/app
+          mkdir -p /usr/src/app/out/Release
+          ln -s /usr/local/bin/iojs /usr/src/app/out/Release/iojs
+    - script:
+        name: run test suite
+        code: |
+          cd /usr/src/app
+          ./configure
+          python tools/test.py -v --mode=release
+
+deploy:
+  # NOTE(termie): here, if you need fewer dependencies than the build box
+  #               you could use a more stripped down box that only has
+  #               the runtime deps for iojs
+  # box: minimal
+  steps:
+    - script:
+        name: install iojs
+        code: |
+          # NOTE(termie): again, we'd probably want to set this using wercker.com
+          export NPM_CONFIG_LOGLEVEL=info
+          export IOJS_VERSION=1.6.3
+
+          # NOTE(termie): the tarball we copied to $WERCKER_OUTPUT_DIR in the
+          #               during build is automatically available to deploys
+          tar -xzf "iojs-v$IOJS_VERSION-linux-x64.tar.gz" -C /usr/local --strip-components=1
+          rm "iojs-v$IOJS_VERSION-linux-x64.tar.gz" SHASUMS256.txt.asc
+    - internal/docker-push:
+        repository: iojs
+        # NOTE(termie): if we set the env vars using wercker.com, we can use
+        #               those in the steps, but we didn't here...
+        # tag: $IOJS_VERSION
+        tag: 1.6.3
+        # NOTE(termie): you'll make these private variables on wercker.com
+        username: $DOCKER_USERNAME
+        password: $DOCKER_PASSWORD
+
